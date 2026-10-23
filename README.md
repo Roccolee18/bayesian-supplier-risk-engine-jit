@@ -20,6 +20,7 @@ This report aims to help senior managers of a manufacturing plant take preventat
     - Delays are zero-inflated with a log-normal tail
     - Usage-per-part (and therefore, product demand) are held constant
     - Suppliers are expected to ship 1 part per day for a month
+    - Ths simulated plants only produce 1 model 
 - Using simulated data calls for seperate scenarios to be run to remove artefacts of generated data. 4 models will be fit within each scenario, and results will be derived only if they are observable across all scenarios.
     1. Scenario 1: True supplier clusters exist. The generated dataset will include clear indicators of supplier reliability that allow for clear clusters to be formed. 
     2. Scenario 2: No clusters exist. The generated dataset will make each supplier as unique as possible
@@ -63,7 +64,11 @@ This report aims to help senior managers of a manufacturing plant take preventat
 - What it means in plain language -->
 
 ## From model to decision
-
+The output pipeline will be as follows:
+- The model will output a predicted delayed delivery rate for each supplier
+- Any predicted delayed delivery rate above a threshold will be converted into a probability of being a production constraint within the next 72 hours
+    - Factors such as our in-house safety stock, usage per hour, and availability in other plants will determine how much a delayed delivery will increase the probability of that part becoming a production constraint
+- Both the predicted delayed delivery rate and the calculated probability will be displayed on a PowerBI dashboard in a table format for investigation by analysts, directed by the senior manager
 
 <!-- How forecasts become 72h shortage risk, and what the dashboard shows. -->
 
