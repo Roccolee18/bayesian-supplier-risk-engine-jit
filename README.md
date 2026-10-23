@@ -31,6 +31,7 @@ This report aims to help senior managers of a manufacturing plant take preventat
 | :--- | :--- | :--- |
 | planned_delivery_datetime | Planned date and time of delivery | Identifier |
 | actual_delivery_datetime | Actual date and time of delivery | Identifier |
+| shipment_id | ID of shipment | Identifier |
 | part_code | Internal part code | Identifier |
 | supplier_code | Internal supplier code | Identifier |
 | plant | Delivery destination | Identifier |
