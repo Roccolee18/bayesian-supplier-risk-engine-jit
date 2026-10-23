@@ -1,0 +1,21 @@
+# conda environment file for the meddatathon project instructions:
+# conda env create -f environment.yml
+
+
+# To update the environment after modifying this file:
+# conda env update -f environment.yml --prune
+
+name: supplier-risk-engine
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - ipykernel
+  - jupyterlab
+  - pandas
+  - scikit-learn
+  - plotly
+  - altair
+  - numpy
+  - pymc
