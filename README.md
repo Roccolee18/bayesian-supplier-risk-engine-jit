@@ -29,13 +29,15 @@ This report aims to help senior managers of a manufacturing plant take preventat
 
 | Column | Description | Used As |
 | :--- | :--- | :--- |
-| delivery_datetime | Date and time of delivery | Identifier |
+| planned_delivery_datetime | Planned date and time of delivery | Identifier |
+| actual_delivery_datetime | Actual date and time of delivery | Identifier |
 | part_code | Internal part code | Identifier |
 | supplier_code | Internal supplier code | Identifier |
 | plant | Delivery destination | Identifier |
 | lead_time_days | Planned order-to-deliver time | Feature |
 | num_overflow | Number of boxes logged in Overflow at time of delivery | Feature |
 | amt_shorted | Number of boxes shorted when a shortage occurs | Feature |
+| safety_inv | Amount of in-house safety stock | Feature |
 | usage_per_hour | Part's usage per hour | Feature |
 | num_pulled_in | Number of times a later invoice had to be pulled in due to empty lineside inventory | Feature |
 | true_cluster | Supplier's latent cluster from the siumulator | Evaluation only |
