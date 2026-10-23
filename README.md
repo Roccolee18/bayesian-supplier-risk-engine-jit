@@ -14,12 +14,12 @@ This report aims to help senior managers of a manufacturing plant take preventat
 
 ## Data
 - The dataset for this study will be simulated from a prior distribution of plausable values. 
-- Each row represents 1 delivery from 1 supplier of 1 part to 1 plant at a certain time of day.
+- Each row represents 1 delivery of 1 part from 1 supplier to 1 plant.
 - Key assumptions:
     - The simulation only focuses on a fraction of parts from a real-life industrial manufacturing plant
     - Delays are zero-inflated with a log-normal tail
-    - Usage-per-part (and therefore, product demand) are held constant
-    - Suppliers are expected to ship 1 part per day for a month
+    - Usage-per-part (and therefore, product demand) is held constant
+    - Suppliers are expected to ship each part at least once in the simulation period
     - Ths simulated plants only produce 1 model 
 - Using simulated data calls for seperate scenarios to be run to remove artefacts of generated data. 4 models will be fit within each scenario, and results will be derived only if they are observable across all scenarios.
     1. Scenario 1: True supplier clusters exist. The generated dataset will include clear indicators of supplier reliability that allow for clear clusters to be formed. 
@@ -29,9 +29,10 @@ This report aims to help senior managers of a manufacturing plant take preventat
 
 | Column | Description | Used As |
 | :--- | :--- | :--- |
-| delay_hours | Hours late vs. scheduled arrival (0 if on time) | Target |
+| total_delay_hours | Hours late vs. scheduled arrival (0 if on time) | Target |
 | lead_time_days | Planned order-to-deliver time | Feature |
-| num_overflow | Number of boxes stored in Overflow area | Feature |
+| num_overflow | Number of boxes logged in Overflow at time of delivery | Feature |
+| amt_shorted | Number of boxes shorted when a shortage occurs | Feature |
 | usage_per_hour | Part's usage per hour | Feature |
 | num_pulled_in | Number of times a later invoice had to be pulled in due to empty lineside inventory | Feature |
 | true_cluster | Supplier's latent cluster from the siumulator | Evaluation only |
