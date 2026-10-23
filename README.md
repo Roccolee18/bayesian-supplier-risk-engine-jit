@@ -29,7 +29,10 @@ This report aims to help senior managers of a manufacturing plant take preventat
 
 | Column | Description | Used As |
 | :--- | :--- | :--- |
-| total_delay_hours | Hours late vs. scheduled arrival (0 if on time) | Target |
+| delivery_datetime | Date and time of delivery | Identifier |
+| part_code | Internal part code | Identifier |
+| supplier_code | Internal supplier code | Identifier |
+| plant | Delivery destination | Identifier |
 | lead_time_days | Planned order-to-deliver time | Feature |
 | num_overflow | Number of boxes logged in Overflow at time of delivery | Feature |
 | amt_shorted | Number of boxes shorted when a shortage occurs | Feature |
