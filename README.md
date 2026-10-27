@@ -16,33 +16,36 @@ This project aims to help senior managers of a manufacturing plant take preventa
 - The dataset for this study will be simulated from a prior distribution of plausible values. 
 - Each row represents 1 delivery of 1 part from 1 supplier to 1 plant.
 - Key assumptions:
+    - The simulated dataset will consist of made-up orders for 1 year of production
     - The parts base will consist of a simplified set of parts with parameters chosen to be plausible for an assembly plant.
     - Delays are zero-inflated with a log-normal tail
     - Usage-per-part (and therefore, product demand) is held constant
     - Suppliers are expected to ship each part at least once in the simulation period
     - The simulated plants only produce 1 model 
-- Using simulated data calls for separate scenarios to be run to remove artefacts of generated data. 4 models will be fit within each scenario, and ranking discrepencies between scenarios will be analyzed.
+- Using simulated data calls for separate scenarios to be run to remove artefacts of generated data. 4 models will be fit within each scenario, and ranking discrepancies between scenarios will be analyzed.
     1. Scenario 1: True supplier clusters exist. The generated dataset will include clear indicators of supplier reliability that allow for clear clusters to be formed. 
     2. Scenario 2: No clusters exist. Supplier reliability is drawn from one continuous distribution, with no group structure
-    3. Scenario 3: Clusters exist but drift over time. The generated dataset will start each supplier off with a cluster, but then have their performance drift to another cluster near the end of the simulation period. Specifically, 20% of suppliers will switch clusters at month 3, another 10% will switch at month 7
+    3. Scenario 3: Clusters exist but drift over time. The generated dataset will start each supplier off with a cluster, but then have their performance drift to another cluster throughout the simulation period. Specifically, 20% of suppliers will switch clusters at month 3, another 10% will switch at month 7
 - Below is a brief description of the key columns in the dataset:
 
-| Column | Description | Used As |
-| :--- | :--- | :--- |
-| planned_delivery_datetime | Planned date and time of delivery | Identifier |
-| shipment_id | ID of shipment | Identifier |
-| part_code | Internal part code | Identifier |
-| supplier_code | Internal supplier code | Identifier |
-| plant | Delivery destination | Identifier |
-| lead_time_days | Planned order-to-deliver time | Feature |
-| safety_inv | Amount of in-house safety stock | Feature |
-| usage_per_hour | Part's usage per hour | Feature |
-| prev_num_pulled_in | Number of times a later invoice had to be pulled in due to empty lineside inventory from past shortages | Feature |
-| prev_shortages | Number of shortages within the previous 30 days | Feature |
-| avail_in_other_plants | Whether the part is available in other plants | Feature |
-| actual_delivery_datetime | Actual date and time of delivery | Target |
-| delay_hours | Number of hours the shipment was delayed | Target |
-| true_cluster | Supplier's latent cluster from the simulator | Evaluation only |
+| Column | Description | Used As | Used In |
+| :--- | :--- | :--- | :--- |
+| planned_delivery_datetime | Planned date and time of delivery | Identifier | Delay Model |
+| shipment_id | ID of shipment | Identifier | Delay Model |
+| part_code | Internal part code | Identifier | Delay Model |
+| supplier_code | Internal supplier code | Identifier | Delay Model |
+| plant | Delivery destination | Identifier | Delay Model |
+| lead_time_days | Planned order-to-deliver time | Feature | Delay Model |
+| trailing_mean_delay | 30-day trailing average delay | Feature | Delay Model |
+| on_time_rate | Proportion of deliveries made on-time versus experiencing a delay | Feature | Delay Model |
+| safety_inv | Amount of in-house safety stock | Feature | Prod. Constraint Calculation |
+| usage_per_hour | Part's usage per hour | Feature | Prod. Constraint Calculation |
+| prev_num_pulled_in | Number of times a later invoice had to be pulled in due to empty lineside inventory from past shortages | Feature | Prod. Constraint Calculation |
+| prev_shortages | Number of shortages within the previous 30 days | Feature | Prod. Constraint Calculation |
+| avail_in_other_plants | Whether the part is available in other plants | Feature | Prod. Constraint Calculation |
+| delay_hours | Number of hours the shipment was delayed | Target | Delay Model |
+| actual_delivery_datetime | Actual date and time of delivery | Target Source | Delay Model |
+| true_cluster | Supplier's latent cluster from the simulator | Evaluation only | Delay Model |
 
 
 ## Methodology
@@ -50,22 +53,25 @@ This project aims to help senior managers of a manufacturing plant take preventa
 
 |  | No Clustering | Clustering |
 | :--- | :--- | :--- |
-| Non-Hierarchical Bayes | Model 1 (naive) | Model 2 |
+| Non-Hierarchical Bayes | Model 1 | Model 2 |
 | Hierarchical Bayes | Model 3 | Model 4 |
+
+- Note: A naive model of supplier's trailing average delays will act a baseline that all 4 models have to beat
+
 - The final model that will be selected to power the PowerBI dashboard is the model that has the best CRPS score
 
 - Clustering will be done based on supplier features, such as mean delay, on-time rate, usage per hour, etc.
-- Each cluster is only fit inside its training window to prevent leakage, and metrics will be derived from walk-forward folds plus a final held-out testng period.
+- Each cluster is only fit inside its training window to prevent leakage, and metrics will be derived from walk-forward folds plus a final held-out testing period.
 
 - Candidate clustering algorithms that will be tested are: 
     - K-means clustering as a baseline
-    - Gaussian Mixed Models as cluster probabilities fit better in a Bayesian pipeline
-    - Hierchical clustering to check that the clustering structure holds up
+    - Gaussian Mixture Models as cluster probabilities fit better in a Bayesian pipeline
+    - Hierarchical clustering to check that the clustering structure holds up
 
 - The number of clusters will be chosen based on peaks on a Silhouette score , BIC plus a bootstrap stability check
 
 ## Results
-
+- WIP
 
 <!-- - One results table: models x metrics, per scenario, with intervals
 - 1–2 key plots (e.g. calibration, cold-start vs. established suppliers)
@@ -73,21 +79,21 @@ This project aims to help senior managers of a manufacturing plant take preventa
 
 ## From model to decision
 The output pipeline will be as follows:
-- The model will output a predicted delayed delivery rate for each supplier
-- Each supplier's delayed delivery rate will be split linearly between the parts supplied by that supplier, based on the number of deliveries made for each part
-- All predicted delayed delivery rate will be converted into a probability of being a production constraint within the next 72 hours
-    - Factors such as our in-house safety stock, usage per hour, and availability in other plants will determine how much a delayed delivery will increase the probability of that part becoming a production constraint
-- The top 5 highest predicted delayed delivery rate and calculated probability of production constraint will be displayed on a PowerBI dashboard in a table format for investigation by analysts, directed by the senior manager
+1. The model will output a distribution of predicted delayed delivery rates for each upcoming delivery in the next 72 hours
+2. All predicted delayed delivery rate will be converted into a probability of being a production constraint within the next 72 hours by the following:
+    1. Coverage for the part will be calculated as (In-House Inventory + Safety Stock) / Usage Per Hour
+    2. Predictive draws will be made from the posterior where delay exceeds coverage
+3. The top 5 highest predicted delayed delivery rate and calculated probability of production constraint will be displayed on a PowerBI dashboard in a table format for investigation by analysts, directed by the senior manager
 
 
 ## Limitations and next steps
-
+- WIP
 
 <!-- Simulated data, assumptions that may not hold in real plants,
 what you'd do with real data (e.g. a Bayesian mixture model). -->
 
-## Reproduce it
-
+## Reproducibility
+- WIP
 
 <!-- Setup, then one command to rerun everything. Repo structure tree. -->
 
