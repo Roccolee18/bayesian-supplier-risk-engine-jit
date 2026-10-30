@@ -1,6 +1,6 @@
 """Walk-forward folds, per-fold imputation and per-fold supplier clustering.
 
-Input : data/processed/<scenario>/features.parquet   (from features/build_features.py)
+Input : data/processed/<scenario>/features.parquet   (from src/build_features.py)
 Output: data/processed/<scenario>/folds/
             fold_definitions.json      dates, imputation values, chosen k per algorithm
             cluster_labels.parquet     one row per fold x supplier
