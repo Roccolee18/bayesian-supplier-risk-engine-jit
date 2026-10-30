@@ -56,7 +56,7 @@ from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.mixture import GaussianMixture
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_features import supplier_snapshot  # noqa: E402
 
 PROCESSED = ROOT / "data" / "processed"
