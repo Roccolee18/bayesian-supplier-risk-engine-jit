@@ -57,7 +57,7 @@ This project aims to help senior managers of a manufacturing plant take preventa
 
 - Note: A naive model of each supplier's own past delays in the training window will act a baseline that all 4 models have to beat. Suppliers with fewer than 20 past deliveries use all suppliers’ delays pooled.
 
-- The final model that will be selected to power the PowerBI dashboard is the model that has the best CRPS score
+- The final model that will be selected to power the PowerBI dashboard is the model that has the best CRPS score. If performance gain between 2 models are close, the simplest model will be chosen
 
 - Clustering will be done based on supplier features, such as late rate, mean late delay and delay spread.
 - Each cluster is only fit inside its training window to prevent leakage, and metrics will be derived from walk-forward folds plus a final held-out testing period.
@@ -70,8 +70,21 @@ This project aims to help senior managers of a manufacturing plant take preventa
 - The number of clusters will be chosen based on peaks on a Silhouette score , BIC plus a bootstrap stability check
 
 ## Results
-- WIP
 
+### Clustering Results
+- **WIP**
+
+### Cross-Validation Results
+After examining the results across each fold per scenario, it can be concluded that supplier clusters do not improve delay and shortage forecasts beyond hierarchical pooling. Adding clusters changed CRPS by about 0.1% when true clusters existed, made forecasts consistently worse when suppliers drifted between clusters (+0.3%, all 4 folds), and hurt new suppliers that joined mid-year. Partial pooling also added little performance (≤0.25%).
+
+Another key finding is that the models only beat a naive baseline when supplier behaviour drifts. With stable suppliers and long histories, replaying each supplier’s past delays was as accurate as any model. Under drift, every model beat it in all 4 folds (about 2% CRPS, growing to 2.4% by the last fold), removed the baseline’s tendency to under-predict lateness, and improved shortage flagging (precision@10 from 0.375 to 0.41). The gain comes from recent-window features rather than model structure, and the simplest model (model 1) captured nearly all of it at a fraction of the training time of the hierarchical models. Therefore, this will be the model that advances to holdout testing.
+
+An anomaly of 7 divergences was detected when training fold 2 of model 4 in the `no_clusters` scenario, while every other fit had no divergences detected. 
+
+### Holdout Results
+Since model 1 captures nearly all accuracy gains from recent-window feature calculation and being much faster to fit, I will be proceeding with holdout testing using this model versus the naive baseline to validate this conditional finding. The results are shown below:
+
+- **<Holdout test results>**
 <!-- - One results table: models x metrics, per scenario, with intervals
 - 1–2 key plots (e.g. calibration, cold-start vs. established suppliers)
 - What it means in plain language -->
