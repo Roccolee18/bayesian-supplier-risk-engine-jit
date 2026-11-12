@@ -87,10 +87,19 @@ The output pipeline will be as follows:
 
 
 ## Limitations and next steps
-- WIP
+- The biggest caveat to this project is the use of simulated data in the place of real operational data. Therefore, ensuring fairness in the simulated dataset and trying to mimic, as much as possible, the volume and abnormalities experienced in a real manufacturing environment has been a top priority for this project. This was done by making broad, conservative assumptions about delivery metrics (such as on-time rate, delay amount, etc.) and exploring the possibility of supplier cluster structure existing, not existing, or shifting with time, and how that will impact model performance. 
+- Despite this, there is still room for improvement:
+1. Assumptions such as there being steady demand throughout the year, the number of parts and deliveries made, and only 1 model being produced by the plant will probably not hold up in a real manufacturing plant. The impact of these assumptions being violated would introduce more variability to the model, potentially causing further non-convergence in the Hierarchical models. However, with more delivery volume, the models will have more data to digest, which may outweigh the additional variability. 
+2. Delays in a real manufacturing plant are likely to be messier than the zero-inflated log-normal distribution used in this simulation. Hence, the results generated are the "best case" for fitting a model to.
+3. No real-world delay drivers (such as weather, boarder crossing, traffic, etc.) are included in the model 
 
-<!-- Simulated data, assumptions that may not hold in real plants,
-what you'd do with real data (e.g. a Bayesian mixture model). -->
+
+- Further, performing the experiment with real data would allow me to, as next steps:
+1. Confirm whether suppliers form stable clusters at all
+2. Incorperate short-time horizon signals to improve model accuracy, such as border wait times, weatehr, and carrier ETA
+3. Confirm an appropriate delay distrubution was chosen to fit a model to
+4. Confirm the impact of this analysis pipeline through logging actions taken, since a prevented shortage can look like a wrong prediction on paper.
+
 
 ## Reproducibility
 
