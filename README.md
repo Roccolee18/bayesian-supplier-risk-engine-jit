@@ -36,12 +36,11 @@ This project aims to help senior managers of a manufacturing plant take preventa
 | supplier_code | Internal supplier code | Identifier | Delay Model |
 | plant | Delivery destination | Identifier | Delay Model |
 | lead_time_days | Planned order-to-deliver time | Feature | Delay Model |
-| trailing_mean_delay | 30-day trailing average delay | Feature | Delay Model |
-| on_time_rate | Proportion of deliveries made on-time versus experiencing a delay | Feature | Delay Model |
+| sup_late_rate_30d | 30-day trailing average delay | Feature | Delay Model |
 | safety_inv | Amount of in-house safety stock | Feature | Prod. Constraint Calculation |
 | usage_per_hour | Part's usage per hour | Feature | Prod. Constraint Calculation |
 | prev_num_pulled_in | Number of times a later invoice had to be pulled in due to empty lineside inventory from past shortages | Feature | Prod. Constraint Calculation |
-| prev_shortages | Number of shortages within the previous 30 days | Feature | Prod. Constraint Calculation |
+| part_shortages_30d | Number of shortages within the previous 30 days | Feature | Prod. Constraint Calculation |
 | avail_in_other_plants | Whether the part is available in other plants | Feature | Prod. Constraint Calculation |
 | delay_hours | Number of hours the shipment was delayed | Target | Delay Model |
 | actual_delivery_datetime | Actual date and time of delivery | Target Source | Delay Model |
@@ -56,11 +55,11 @@ This project aims to help senior managers of a manufacturing plant take preventa
 | Non-Hierarchical Bayes | Model 1 | Model 2 |
 | Hierarchical Bayes | Model 3 | Model 4 |
 
-- Note: A naive model of supplier's trailing average delays will act a baseline that all 4 models have to beat
+- Note: A naive model of each supplier's own past delays in the training window will act a baseline that all 4 models have to beat. Suppliers with fewer than 20 past deliveries use all suppliers’ delays pooled.
 
 - The final model that will be selected to power the PowerBI dashboard is the model that has the best CRPS score
 
-- Clustering will be done based on supplier features, such as mean delay, on-time rate, usage per hour, etc.
+- Clustering will be done based on supplier features, such as late rate, mean late delay and delay spread.
 - Each cluster is only fit inside its training window to prevent leakage, and metrics will be derived from walk-forward folds plus a final held-out testing period.
 
 - Candidate clustering algorithms that will be tested are: 
@@ -81,23 +80,23 @@ This project aims to help senior managers of a manufacturing plant take preventa
 The output pipeline will be as follows:
 1. The model will output a distribution of predicted delayed delivery rates for each upcoming delivery in the next 72 hours
 2. All predicted delayed delivery rate will be converted into a probability of being a production constraint within the next 72 hours by the following:
-    1. Coverage for the part will be calculated as (In-House Inventory + Safety Stock) / Usage Per Hour
+    1. Coverage for the part will be calculated as Safety Stock / Usage Per Hour
     2. Predictive draws will be made from the posterior where delay exceeds coverage
-3. The top 5 highest predicted delayed delivery rate and calculated probability of production constraint will be displayed on a PowerBI dashboard in a table format for investigation by analysts, directed by the senior manager
+3. The top 10 highest predicted delayed delivery rate and calculated probability of production constraint will be displayed on a PowerBI dashboard in a table format for investigation by analysts, directed by the senior manager
 
 
 ## Limitations and next steps
-- The biggest caveat to this project is the use of simulated data in the place of real operational data. Therefore, ensuring fairness in the simulated dataset and trying to mimic, as much as possible, the volume and abnormalities experienced in a real manufacturing environment has been a top priority for this project. This was done by making broad, conservative assumptions about delivery metrics (such as on-time rate, delay amount, etc.) and exploring the possibility of supplier cluster structure existing, not existing, or shifting with time, and how that will impact model performance. 
+- The biggest caveat to this project is the use of simulated data in the place of real operational data. Therefore, ensuring fairness in the simulated dataset and trying to mimic, as much as possible, the volume and abnormalities experienced in a real manufacturing environment has been a top priority for this project. This was done by making broad assumptions about delivery metrics (such as on-time rate, delay amount, etc.) and exploring the possibility of supplier cluster structure existing, not existing, or shifting with time, and how this affects model performance. 
 - Despite this, there is still room for improvement:
-1. Assumptions such as there being steady demand throughout the year, the number of parts and deliveries made, and only 1 model being produced by the plant will probably not hold up in a real manufacturing plant. The impact of these assumptions being violated would introduce more variability to the model, potentially causing further non-convergence in the Hierarchical models. However, with more delivery volume, the models will have more data to digest, which may outweigh the additional variability. 
+1. Assumptions such as there being steady demand throughout the year, the number of parts and deliveries made, and only 1 model being produced by the plant will probably not hold up in a real manufacturing plant. The impact of these assumptions being violated would introduce more variability to the model, which could make the hierarchical models harder to fit. However, with more delivery volume, the models will have more data to digest, which may outweigh the additional variability. 
 2. Delays in a real manufacturing plant are likely to be messier than the zero-inflated log-normal distribution used in this simulation. Hence, the results generated are the "best case" for fitting a model to.
-3. No real-world delay drivers (such as weather, boarder crossing, traffic, etc.) are included in the model 
-
+3. Only winter and short regional disruptions are simulated; drivers such as weather, border crossings, traffic and carrier performance are not
+4. Real suppliers share carriers and routes, so delays typically involve more than one shipment per supplier
 
 - Further, performing the experiment with real data would allow me to, as next steps:
 1. Confirm whether suppliers form stable clusters at all
-2. Incorperate short-time horizon signals to improve model accuracy, such as border wait times, weatehr, and carrier ETA
-3. Confirm an appropriate delay distrubution was chosen to fit a model to
+2. Incorporate short-time horizon signals to improve model accuracy, such as border wait times, weather, and carrier ETA
+3. Confirm an appropriate delay distribution was chosen to fit a model to
 4. Confirm the impact of this analysis pipeline through logging actions taken, since a prevented shortage can look like a wrong prediction on paper.
 
 
@@ -106,27 +105,32 @@ The output pipeline will be as follows:
 ### Environment Setup
 1. Install Anaconda and Git Bash, and navigate to the working directory in which this repo was cloned
 2. To replicate the environment, simply run `conda env create -f environment.yml`
+3. Activate the environment with `conda activate supplier-risk-engine`
 - This creates a virtual environment with all required packages installed
 
 ### Running The Experiment
 Follow this sequence to build the data, engineer the features and build each training fold to ensure no leakage:
 1. Run `python ./src/generate_all.py`
-    - This script creates the simulated data based on a random seed. Extra flags can be passed when running this command to generate data for a specific scenario. See the Python file for the specific syntax
-2. Run `python ./src/build_master_panel.py`
-    - This script builds the master panel from which features and, eventually, models will be built from. Each row represents 1 delivery, and the output master_panel.parquet file is saved under `./data/raw/`
-3. Run `python ./src/build_features.py`
-    - This script uses the master panel to build leakage-safe modelling features from the master panel. A JSON file describing each column's role and a `features.parquet` file will be saved under `./data/processed/<scenario>/` for each scenario
-4. Run `python ./src/build_folds.py`
+    - This script creates the simulated data based on a random seed. Extra flags can be passed when running this command to generate data for a specific scenario. See the Python file for the specific syntax.
+2. Run `python ./src/build_features.py`
+    - This script uses the master panel to build modelling features from the master panel. A JSON file describing each column's role and a `features.parquet` file will be saved under `./data/processed/<scenario>/` for each scenario. A built-in leakage check is ran alongside feature calculation.
+3. Run `python ./src/build_folds.py`
     - This script performs the training and testing data split and builds training folds for cross-validation. Imputation and clustering algorithms are also fit at this step. Outputs will be stored in `data/processed/<scenario>/folds/`
-5. Run `python ./src/evaluate_models.py`
+4. Run `python ./src/evaluate_models.py`
     - This script fits and scores the naive baseline and models 1-4 on every walk-forward fold. Each scenario will have 4 outputs: 
-        1. `metrics.csv` - one row per fold x model (all metrics, fit time, diagnostics)
-        2. `summary.csv` - mean across CV folds + paired CRPS difference vs naive
+        1. `results/<scenario>/metrics.csv` - one row per fold x model (all metrics, fit time, diagnostics)
+        2. `results/<scenario>/summary.csv` - mean across CV folds + paired CRPS difference vs naive
         3. `predictions/<fold>_<model>_shipments.parquet` - per-shipment forecast summary
         4. `predictions/<fold>_<model>_rows.parquet` - Calculated probability of being a shortage per delivery (row)
-    - The script can be configured to run only a subset of models, a certain scenario, a quick smoke test or the final holdout set based on the flag it is executed with. Specific flag usage can be found in the Python file itself.
-    - Note: Step 5 takes a while to run
-    - Note: a (fold, model) pair already in metrics.csv is skipped unless --overwrite is passed, so a long run can be stopped and restarted.
+    - The script can be configured to run only a subset of models, a certain scenario or a quick smoke test based on the flag it is executed with. Specific flag usage can be found in the Python file itself.
+
+Notes: 
+- By default, the final holdout set is not ran, as it should only be run once at the end for report generation by running the command with a `--holdout` flag
+- Step 5 takes a while to run (~1 hour on a 2-core machine)
+- A (fold, model) pair already in metrics.csv is skipped unless --overwrite is passed, so a long run can be stopped and restarted.
+
+The notebooks in `notebooks/` walk through each step in detail and run the same code as the scripts.
+
 
 ## Tech stack
 Python, PyMC, scikit-learn, Power BI
