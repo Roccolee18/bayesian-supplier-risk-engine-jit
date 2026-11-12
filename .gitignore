@@ -1,2 +1,5 @@
 data/
 src/__pycache__/
+results/*/predictions/
+results/*_quick
+*.pyc
