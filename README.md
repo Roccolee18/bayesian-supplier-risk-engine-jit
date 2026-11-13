@@ -72,7 +72,29 @@ This project aims to help senior managers of a manufacturing plant take preventa
 ## Results
 
 ### Clustering Results
-- **WIP**
+The results from the `build_folds.ipynb` notebook all support a 4-cluster structure within the data. 
+
+While most algorithms across the 4 folds and the holdout set point to this conclusion, hierarchical and k-means clustering found a 3-cluster structure within the first 2 folds. However, folds 3 and 4 for both of the algorithms reverted back to the majority conclusion of a 4-cluster structure. The `true_ari` score for fold 2 further point to this result being unreliable, as a significantly lower score was observed for this fold between the two algorithms.
+
+Below is a table summarising the key characteristics of each cluster, ordered by supplier membership:
+
+| Cluster | # of Suppliers | Late Rate | Mean Delay Hours |
+| :--- | :--- | :--- | :--- |
+| C1 | 149 | 0.08 | 0.553 |
+| C2 | 133 | 0.215 | 2.635 |
+| C3 | 76 | 0.211 | 0.869 |
+| NEW | 8 | 0.124 | 0.594 |
+
+C1 having the largest population of suppliers and the lowest mean delay hours makes sense, as most suppliers should be able to make the majority of their shipments on time, with occasional minor delays. C2 presents an interesting case, as it shows that the second largest population of suppliers are ones with the highest late rates and longest mean delay hours. C3 seems to be middle-of-the-road suppliers who provide late delivers some of the time but not by much. Finally, the NEW cluster is assigned to suppliers who started supplying parts mid-year. This cluster's results should be taken carefully as they won't have as much data as others, and each individual delay pulls the mean delay hours metric a lot more due to the smaller sample size.
+
+With these results, each cluster can be labeled as the following:
+
+| Cluster | Label |
+| :--- | :--- |
+| C1 | Reliable Suppliers |
+| C2 | Inconsistant Suppliers |
+| C3 | Average Suppliers | 
+| NEW | New Suppliers |
 
 ### Cross-Validation Results
 After examining the results across each fold per scenario, it can be concluded that supplier clusters do not improve delay and shortage forecasts beyond hierarchical pooling. Adding clusters changed CRPS by about 0.1% when true clusters existed, made forecasts consistently worse when suppliers drifted between clusters (+0.3%, all 4 folds), and hurt new suppliers that joined mid-year. Partial pooling also added little performance (≤0.25%).
