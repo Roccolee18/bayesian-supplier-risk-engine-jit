@@ -21,3 +21,4 @@ dependencies:
   - pymc
   - pyarrow
   - nutpie
+  - tabulate
