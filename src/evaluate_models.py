@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from build_folds import PROCESSED, SCENARIOS, load_fold
-from models import BAYES, MODELS, HurdleModel, naive_samples, to_shipments
+from models import BAYES, FEATURE_SET, MODELS, HurdleModel, naive_samples, to_shipments
 from scoring import score, summarize
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,13 +78,13 @@ def prepare_fold(scenario: str, fold_id: str):
 # Step 2: get predictive samples from one model
 # --------------------------------------------------------------------------- #
 def predict(model_name: str, train_ships, test_ships, cfg: dict, seed: int, sampler: str,
-            subsample_seed: int = 0):
+            subsample_seed: int = 0, feature_set: str = FEATURE_SET):
     rng = np.random.default_rng(seed)
     start = time.time()
     if model_name == "naive":
         samples, diag = naive_samples(train_ships, test_ships, cfg["n_pred_draws"], rng), {}
     else:
-        model = HurdleModel(model_name).fit(train_ships, cfg["n_train"], cfg["draws"], cfg["tune"],
+        model = HurdleModel(model_name, feature_set).fit(train_ships, cfg["n_train"], cfg["draws"], cfg["tune"],
                                             cfg["chains"], seed % 2**32, subsample_seed, sampler)
         samples, diag = model.predict_samples(test_ships, cfg["n_pred_draws"], rng), model.diagnostics()
     return samples, diag, time.time() - start
@@ -114,7 +114,8 @@ def save_predictions(samples, test_ships, test_rows, out: Path, fold_id: str, mo
 # Step 3: run a scenario
 # --------------------------------------------------------------------------- #
 def run(scenario: str, fold_ids: list[str], models: list[str], cfg: dict,
-        sampler: str = "nutpie", overwrite: bool = False, tag: str = "") -> pd.DataFrame:
+        sampler: str = "nutpie", overwrite: bool = False, tag: str = "",
+        feature_set: str = FEATURE_SET) -> pd.DataFrame:
     out = RESULTS / f"{scenario}{tag}"
     out.mkdir(parents=True, exist_ok=True)
     metrics_path = out / "metrics.csv"
@@ -132,7 +133,7 @@ def run(scenario: str, fold_ids: list[str], models: list[str], cfg: dict,
         for model_name in todo:
             samples, diag, seconds = predict(model_name, train_ships, test_ships, cfg,
                                              fold_seed(scenario, fold_id, model_name), sampler,
-                                             subsample_seed)
+                                             subsample_seed, feature_set)
             row = {"scenario": scenario, "fold_id": fold_id, "model": model_name,
                    **score(samples, test_ships, test_rows), "seconds": round(seconds, 1), **diag}
             metrics = pd.concat([metrics[~((metrics.get("fold_id") == fold_id) & (metrics.get("model") == model_name))]
@@ -166,6 +167,9 @@ def main() -> None:
     parser.add_argument("--quick", action="store_true", help="Smoke test: fold_1 only, small fits.")
     parser.add_argument("--sampler", choices=("nutpie", "pymc"), default="nutpie")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--feature-set", choices=("v1", "v2"), default=FEATURE_SET,
+                        help="Predictor set (models.FEATURE_SET). Non-default sets write to "
+                             "results/<scenario>_<set>/ so they never mix with the main results.")
     for k, v in DEFAULTS.items():
         parser.add_argument(f"--{k.replace('_', '-')}", type=int, default=None, help=f"default {v}")
     args = parser.parse_args()
@@ -176,7 +180,8 @@ def main() -> None:
         meta = json.loads((PROCESSED / scenario / "folds" / "fold_definitions.json").read_text())
         cv_folds = [f["fold_id"] for f in meta["folds"] if f["fold_id"] != "holdout"]
         folds = ["holdout"] if args.holdout else (["fold_1"] if args.quick else (args.folds or cv_folds))
-        run(scenario, folds, args.models, cfg, args.sampler, args.overwrite, "_quick" if args.quick else "")
+        tag = ("_quick" if args.quick else "") + ("" if args.feature_set == FEATURE_SET else f"_{args.feature_set}")
+        run(scenario, folds, args.models, cfg, args.sampler, args.overwrite, tag, args.feature_set)
 
 
 if __name__ == "__main__":

@@ -58,6 +58,18 @@ BAYES = {
 HEADS = ("late", "mu", "sigma")
 MAX_PRED_DELAY_HOURS = 336.0     # 2 weeks: a truck later than this is a cancellation, not a delay
 SUPPLIER_EFFECT_HEADS = ("late", "mu")
+
+# Predictor set used by every model.
+#   "v1": the original history features (build_features.py)
+#   "v2": v1 + drift-weighted features (drift_features.py): an exponentially
+#         weighted late rate and late delay, entered as their gap from the
+#         supplier's all-history level. Requires features.parquet built by
+#         drift_features.py.
+# Default stays "v1": on the CV folds, v2 changed fast model 1's CRPS by
+# -0.0001 in the drift scenario (better in 2/4 folds) and ~0 elsewhere, well
+# inside fold-to-fold noise, so it did not meet the bar for adoption.
+FEATURE_SET = "v1"
+DRIFT_COLUMNS = ("sup_late_rate_ewm", "sup_late_delay_ewm", "sup_ewm_n")
 NAIVE_MIN_SHIPMENTS = 20
 PRIORS = {   # (intercept mean, intercept sd, coefficient sd) on the standardized scale
     "late": (-2.0, 1.5, 0.5),           # ~12% late at the intercept
@@ -81,9 +93,14 @@ def _logit(p):
     return np.log(p / (1 - p))
 
 
-def head_predictors(df: pd.DataFrame, head: str) -> pd.DataFrame:
+def head_predictors(df: pd.DataFrame, head: str, feature_set: str = FEATURE_SET) -> pd.DataFrame:
     """Transformed predictors for one head. Rates on the logit scale, delays on
     the log scale; overlapping windows entered as differences."""
+    if feature_set == "v2":
+        missing = [c for c in DRIFT_COLUMNS if c not in df]
+        if missing:
+            raise KeyError(f"feature_set='v2' needs {missing}. Run src/drift_features.py "
+                           "(then src/build_folds.py), or use feature_set='v1'.")
     late_all, late_90, late_30 = (_logit(df[f"sup_late_rate_{w}"]) for w in ("all", "90d", "30d"))
     delay_all = np.log(df["sup_mean_late_delay_all"].clip(lower=0.05))
     delay_90 = np.log(df["sup_mean_late_delay_90d"].clip(lower=0.05))
@@ -103,8 +120,13 @@ def head_predictors(df: pd.DataFrame, head: str) -> pd.DataFrame:
             "trips_per_day": df["trips_per_day"],
             **common,
         }
+        if feature_set == "v2":
+            cols["late_ewm_vs_all"] = _logit(df["sup_late_rate_ewm"]) - late_all
+            cols["log_ewm_n"] = np.log1p(df["sup_ewm_n"])
     elif head == "mu":
         cols = {"log_late_delay_all": delay_all, "late_delay_90d_vs_all": delay_90 - delay_all, **common}
+        if feature_set == "v2":
+            cols["late_delay_ewm_vs_all"] = np.log(df["sup_late_delay_ewm"].clip(lower=0.05)) - delay_all
     else:
         cols = {
             "log_delay_sd_all": df["sup_log_delay_sd_all"],
@@ -130,9 +152,10 @@ class Design:
     within a cluster.
     """
 
-    def fit(self, train: pd.DataFrame, head: str, groups: pd.Series | None = None) -> "Design":
-        self.head = head
-        x = head_predictors(train, head)
+    def fit(self, train: pd.DataFrame, head: str, groups: pd.Series | None = None,
+            feature_set: str = FEATURE_SET) -> "Design":
+        self.head, self.feature_set = head, feature_set
+        x = head_predictors(train, head, feature_set)
         region_cols = sorted(c for c in x.columns if c.startswith("region_"))
         x = x.drop(columns=region_cols[:1])            # reference region, avoids collinearity
         self.columns = list(x.columns)
@@ -144,7 +167,7 @@ class Design:
         return self
 
     def transform(self, df: pd.DataFrame, groups: pd.Series | None = None) -> np.ndarray:
-        x = head_predictors(df, self.head).reindex(columns=self.columns, fill_value=0.0)
+        x = head_predictors(df, self.head, self.feature_set).reindex(columns=self.columns, fill_value=0.0)
         z = ((x - self.mean) / self.sd).fillna(0.0)
         if self.group_means is not None:
             z = z - self.group_means.reindex(groups.to_numpy()).fillna(0.0).to_numpy()
@@ -173,8 +196,9 @@ def naive_samples(train_ships: pd.DataFrame, test_ships: pd.DataFrame,
 class HurdleModel:
     """One of model_1..model_4, fit with PyMC and predicted in NumPy."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, feature_set: str | None = None):
         self.name = name
+        self.feature_set = feature_set or FEATURE_SET
         self.use_clusters = BAYES[name]["clusters"]
         self.supplier_effects = BAYES[name]["suppliers"]
 
@@ -185,7 +209,7 @@ class HurdleModel:
     def _add_head(self, head: str, data: pd.DataFrame) -> "pm.TensorVariable":
         """Linear predictor for one head, inside the active PyMC model."""
         groups = data["cluster"] if self.use_clusters else None
-        design = Design().fit(data, head, groups)
+        design = Design().fit(data, head, groups, self.feature_set)
         self.designs[head] = design
         X = design.transform(data, groups)
         loc, scale, coef_sd = PRIORS[head]
