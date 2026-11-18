@@ -124,6 +124,11 @@ Another key finding is that the models only beat a naive baseline when supplier 
 
 An anomaly of 7 divergences was detected when training fold 2 of model 4 in the `no_clusters` scenario, while every other fit had no divergences detected. 
 
+### Evaluation Results (Drift Features)
+
+After reaching the conclusion that supplier clustering does not add predictive qualities to Bayesian models for predicting shortages, I decided to investigate further to see where improvements can be made. After brainstorming with Claude, I decided to proceed by running diagnostics on the current models to idenfity the biggest gaps in performance between folds and scenarios. A step-by-step breakdown of the diagnostic script can be found in `notebooks/diagnsotics.ipynb`.
+In summary, the largest gap identified is that under drifting supplier clusters, the model's advantage over naive is concentrated in suppliers whose behaviour is changing. This makes sense as once a supplier's cluster drifts, the calculated features would take this new information into future predictions, versus the naive model which simply recycles previous predictions.
+
 ### Holdout Results
 Since model 1 captures nearly all accuracy gains from recent-window feature calculation and being much faster to fit, I will be proceeding with holdout testing using this model versus the naive baseline to validate this conditional finding. The results are shown below:
 
