@@ -127,7 +127,66 @@ An anomaly of 7 divergences was detected when training fold 2 of model 4 in the 
 ### Evaluation Results (Drift Features)
 
 After reaching the conclusion that supplier clustering does not add predictive qualities to Bayesian models for predicting shortages, I decided to investigate further to see where improvements can be made. After brainstorming with Claude, I decided to proceed by running diagnostics on the current models to idenfity the biggest gaps in performance between folds and scenarios. A step-by-step breakdown of the diagnostic script can be found in `notebooks/diagnsotics.ipynb`.
-In summary, the largest gap identified is that under drifting supplier clusters, the model's advantage over naive is concentrated in suppliers whose behaviour is changing. This makes sense as once a supplier's cluster drifts, the calculated features would take this new information into future predictions, versus the naive model which simply recycles previous predictions.
+In summary, the largest gap identified is that, under drifting supplier clusters, the model's advantage over naive is concentrated in suppliers whose behaviour is changing. This makes sense as once a supplier's cluster drifts, the calculated features would take this new information into future predictions, versus the naive model which simply recycles previous predictions.
+
+Following this line of thinking, 3 new features were engineered. These features assign an exponential weight to each shipment that halves every 14 days to put a bias on recent data in an attempt to allow the model to react faster to supplier cluster drift.
+Due to the nature of these features, I would only expect these features to make a significant improvement to model performance under the Drift scenario.
+The feature set with these new features were tested with `evaluate_models.py`, and the results can be found in @tbl-feature-sets.
+
+```{python}
+#| label: tbl-feature-sets
+#| tbl-cap: "Mean CRPS across the four CV folds with the original (v1) and drift-weighted (v2) feature sets. Negative change = v2 better. Fold-to-fold noise is about 0.002 CRPS in the stable scenarios and 0.008 under drift. The naive baseline uses no features, so it is unchanged and not shown."
+#| echo: false
+from pathlib import Path
+
+import pandas as pd
+from IPython.display import Markdown
+
+RESULTS = Path("..") / "results"          # report.qmd lives in reports/
+SCENARIOS = {"clusters": "Clusters", "no_clusters": "No clusters", "drift": "Drift"}
+MODELS = {"model_1": "Model 1", "model_2": "Model 2 (+ clusters)",
+          "model_3": "Model 3 (hierarchical)", "model_4": "Model 4 (hierarchical + clusters)"}
+
+
+def folds_better(scenario: str) -> pd.Series:
+    """Per model: in how many CV folds v2 had lower CRPS than v1."""
+    paths = [RESULTS / scenario / "metrics.csv", RESULTS / f"{scenario}_v2" / "metrics.csv"]
+    if not all(p.exists() for p in paths):
+        return pd.Series(dtype=object)
+    v1, v2 = (pd.read_csv(p).query("fold_id != 'holdout'").pivot(index="fold_id", columns="model", values="crps")
+              for p in paths)
+    diff = (v2 - v1).dropna()
+    return (diff < 0).sum().astype(str) + "/" + diff.count().astype(str)
+
+
+blocks = []
+for key, name in SCENARIOS.items():
+    v1 = pd.read_csv(RESULTS / key / "summary.csv", index_col="model")["crps"]
+    v2 = pd.read_csv(RESULTS / f"{key}_v2" / "summary.csv", index_col="model")["crps"]
+    t = pd.DataFrame({"v1": v1, "v2": v2}).loc[list(MODELS)]
+    t["change"] = t["v2"] - t["v1"]
+    t["pct"] = 100 * t["change"] / t["v1"]
+    t["better"] = folds_better(key).reindex(t.index).fillna("–")
+    t.insert(0, "model", t.index.map(MODELS))
+    t.insert(0, "scenario", [name] + [""] * (len(t) - 1))      # name each scenario once
+    blocks.append(t)
+
+t = pd.concat(blocks, ignore_index=True)
+table = pd.DataFrame({
+    "Scenario": t["scenario"],
+    "Model": t["model"],
+    "CRPS, v1": t["v1"].map("{:.4f}".format),
+    "CRPS, v2": t["v2"].map("{:.4f}".format),
+    "Change (v2 − v1)": t["change"].map("{:+.4f}".format),
+    "Change (%)": t["pct"].map("{:+.2f}%".format),
+    "Folds better": t["better"],
+}).replace({"+0.0000": "0.0000", "-0.0000": "0.0000", "+0.00%": "0.00%", "-0.00%": "0.00%"})
+
+Markdown(table.to_markdown(index=False, disable_numparse=True,
+                           colalign=("left", "left", "right", "right", "right", "right", "right")))
+```
+
+As seen from @tbl-feature-sets, the largest gain from the new feature set can be seen in Model 4 under Drift, and the best model under drift is Model 3.
 
 ### Holdout Results
 Since model 1 captures nearly all accuracy gains from recent-window feature calculation and being much faster to fit, I will be proceeding with holdout testing using this model versus the naive baseline to validate this conditional finding. The results are shown below:
