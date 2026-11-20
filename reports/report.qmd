@@ -130,7 +130,7 @@ After reaching the conclusion that supplier clustering does not add predictive q
 In summary, the largest gap identified is that, under drifting supplier clusters, the model's advantage over naive is concentrated in suppliers whose behaviour is changing. This makes sense as once a supplier's cluster drifts, the calculated features would take this new information into future predictions, versus the naive model which simply recycles previous predictions.
 
 Following this line of thinking, 3 new features were engineered. These features assign an exponential weight to each shipment that halves every 14 days to put a bias on recent data in an attempt to allow the model to react faster to supplier cluster drift.
-Due to the nature of these features, I would only expect these features to make a significant improvement to model performance under the Drift scenario.
+Due to the nature of these features, I would only expect these features to make a significant improvement to model performance under the Drift scenario. Even then, I would only consider CRPS decreases above 0.002 to be significant. Any changes under that threshold will be considered noise.
 The feature set with these new features were tested with `evaluate_models.py`, and the results can be found in @tbl-feature-sets.
 
 ```{python}
@@ -168,7 +168,7 @@ for key, name in SCENARIOS.items():
     t["pct"] = 100 * t["change"] / t["v1"]
     t["better"] = folds_better(key).reindex(t.index).fillna("–")
     t.insert(0, "model", t.index.map(MODELS))
-    t.insert(0, "scenario", [name] + [""] * (len(t) - 1))      # name each scenario once
+    t.insert(0, "scenario", [name] + [""] * (len(t) - 1))
     blocks.append(t)
 
 t = pd.concat(blocks, ignore_index=True)
@@ -186,7 +186,10 @@ Markdown(table.to_markdown(index=False, disable_numparse=True,
                            colalign=("left", "left", "right", "right", "right", "right", "right")))
 ```
 
-As seen from @tbl-feature-sets, the largest gain from the new feature set can be seen in Model 4 under Drift, and the best model under drift is Model 3.
+As seen from @tbl-feature-sets, the largest gain from the new feature set can be seen in Model 4 under Drift (-0.0014 CRPS), and the best model under drift is Model 3.
+Unfortunately, a decrease of -0.0014 in CRPS is within the noise threshold defined before the models were evaluated, so the largest gain bought by the drift features will be considered noise.
+
+While minor improvements can be seen across several other folds, their signal doesnt presist across multiple folds, so I would consider them as noise.
 
 ### Holdout Results
 Since model 1 captures nearly all accuracy gains from recent-window feature calculation and being much faster to fit, I will be proceeding with holdout testing using this model versus the naive baseline to validate this conditional finding. The results are shown below:
